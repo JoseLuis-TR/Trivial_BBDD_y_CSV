@@ -1,5 +1,24 @@
+import com.floern.castingcsv.castingCSV
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.transactions.transaction
+import java.io.File
+import java.nio.file.Files
+import java.nio.file.Paths
+
+// Data class que necesitaremos para que la libreria castingCSV cree el archivo que necesitemos
+data class Usuarios(
+    val ID: String,
+    val Jugador: String,
+    val Contrasenya: String,
+    val NumJugadas: String
+)
+
+// Data class que necesitaremos para que la libreria castingCSV cree el archivo que necesitemos
+data class Resultados(
+    val Jugador:String,
+    val Puntuacion:String,
+    val Fecha:String
+)
 
 /**
  * Tabla que guarda los resultados de los usuarios que juegan al trivial
@@ -28,12 +47,12 @@ object datos_usuario : Table() {
  */
 fun gestionUsuarios(): Juego {
     // Se crea un objeto de tipo Juego y se llama a la función para pedir nombre al usuario
-    var nuevoJuego = Juego()
+    val nuevoJuego = Juego()
     nuevoJuego.pedirNombreUsuario()
 
     // Se hace una query para saber cuantos usuarios existen en la tabla usuarios que contengan
     // el mismo nombre que el usuario actual
-    var usuarioExiste = transaction {
+    val usuarioExiste = transaction {
         datos_usuario.slice(datos_usuario.usuario).select { datos_usuario.usuario eq nuevoJuego.nombreJugador}.count()  }
 
     if(usuarioExiste > 0)
@@ -42,7 +61,7 @@ fun gestionUsuarios(): Juego {
         // la contraseña del usuario y poder comprobar que la contraseña que coloca el nuevo usuario es correcta.
         // En caso de olvido, escribiendo un 0 el programa te imprime la contraseña del usuario
         var loginContra: String
-        var contraUsuario = transaction {
+        val contraUsuario = transaction {
             datos_usuario.select { datos_usuario.usuario eq nuevoJuego.nombreJugador}.first()[datos_usuario.contrasenya]
         }
         while(true)
@@ -68,7 +87,7 @@ fun gestionUsuarios(): Juego {
     } else {
         // En caso de que el usuario no exista en la base de datos se le pedira a este que indique una contraseña
         // para su usuario
-        var nuevaContrasenya = ""
+        var nuevaContrasenya: String
         while(true){
             println("Aún no estas registrado en la base de datos del trivial, escriba una contraseña para guardar sus datos")
             print(">>> ")
@@ -111,7 +130,7 @@ fun comienzoJuego(): Juego {
     println("-------------------------------------")
     println("Bienvenido/a al juego del trivial\n" +
             "-------------------------------------")
-    var juegoActual = gestionUsuarios()
+    val juegoActual = gestionUsuarios()
     juegoActual.lecturaPreguntas()
     juegoActual.escogerDiezPreguntas()
     println("-------------------------------------")
@@ -176,12 +195,13 @@ fun trivial(juegoActual:Juego)
  */
 fun finDeJuego(juegoActual:Juego)
 {
-    var jugarOtraVez = ""
+    var jugarOtraVez: String
     println("-----------RESULTADO FINAL-----------")
     println("Jugador -> ${juegoActual.nombreJugador}")
     println("Puntuación -> ${juegoActual.puntuacion}/10")
     juegoActual.declararFecha()
 
+    // Insertamos la información sobre la última partida en la tabla de resultados
     transaction {
         resultados_trivial.insert {
             it[nomJugador] = juegoActual.nombreJugador
@@ -190,6 +210,7 @@ fun finDeJuego(juegoActual:Juego)
         }
     }
 
+    // Actualizamos a 1 el número de partidas jugadas por el usuario
     transaction {
         datos_usuario.update ({ datos_usuario.usuario eq juegoActual.nombreJugador }) {
             with(SqlExpressionBuilder) {
@@ -215,35 +236,94 @@ fun finDeJuego(juegoActual:Juego)
         }
     }
 
+    // Las variables de formato nos sirven para darle cierto formato a las tablas cuando se imprimen
     val formatoTablaPuntuaciones = "| %-11s | %-11d | %-27s |%n"
-    System.out.format("\n+---------------------------------------------------------+%n");
+    System.out.format("\n+---------------------------------------------------------+%n")
     println("                     TABLA PUNTUACIONES")
-    System.out.format("+-------------+-------------+-----------------------------+%n");
-    System.out.format("| USUARIO     | PUNTUACION  | FECHA                       |%n");
-    System.out.format("+-------------+-------------+-----------------------------+%n");
+    System.out.format("+-------------+-------------+-----------------------------+%n")
+    System.out.format("| USUARIO     | PUNTUACION  | FECHA                       |%n")
+    System.out.format("+-------------+-------------+-----------------------------+%n")
     transaction {
         val filas = resultados_trivial.selectAll().orderBy(resultados_trivial.puntuacion to SortOrder.DESC)
         filas.forEach {
             System.out.format(formatoTablaPuntuaciones, it[resultados_trivial.nomJugador], it[resultados_trivial.puntuacion], it[resultados_trivial.fecha])
         }
     }
-    System.out.format("+---------------------------------------------------------+%n");
+    System.out.format("+---------------------------------------------------------+%n")
 
     val formatoTablaUsuarios = "| %-4d | %-13s | %-13s | %-13d |%n"
-    System.out.format("\n+------------------------------------------------------+%n");
+    System.out.format("\n+------------------------------------------------------+%n")
     println("               USUARIOS REGISTRADOS")
-    System.out.format("+------+---------------+---------------+---------------+%n");
-    System.out.format("| ID   | USUARIO       | CONTRASEÑA    | PART.JUGADAS  |%n");
-    System.out.format("+------+---------------+---------------+---------------+%n");
+    System.out.format("+------+---------------+---------------+---------------+%n")
+    System.out.format("| ID   | USUARIO       | CONTRASEÑA    | PART.JUGADAS  |%n")
+    System.out.format("+------+---------------+---------------+---------------+%n")
     transaction {
         val filasUsuarios = datos_usuario.selectAll().orderBy(datos_usuario.id)
         filasUsuarios.forEach {
             System.out.format(formatoTablaUsuarios, it[datos_usuario.id], it[datos_usuario.usuario], it[datos_usuario.contrasenya], it[datos_usuario.partidasJugadas])
         }
     }
-    System.out.format("+------+---------------+---------------+---------------+%n");
+    System.out.format("+------+---------------+---------------+---------------+%n")
+
+    escrituraCSV()
 }
 
-fun main(args: Array<String>) {
+/**
+ * ## QUE HACE:
+ *   Es una función que es llamada cuando el jugador decide no seguir jugando y lo que hace es crear dos documentos CSV
+ *   con los datos obtenidos de las dos tabla de la base de datos que manejamos en este trivial.
+ */
+fun escrituraCSV()
+{
+    // Obtenemos el Path de ambos archivos CSV que tendrán la información de nuestras tablas
+    val pathUsuarios = Paths.get("src/main/resources/usuarios.csv")
+    val pathResultados = Paths.get("src/main/resources/resultados.csv")
+
+    // Si existen estos archivos, son eliminado para evitar que se repita la misma información en los archivos
+    Files.deleteIfExists(pathUsuarios)
+    Files.deleteIfExists(pathResultados)
+
+    // Se crean de nuevo los dos archivos csv con sendos nombres
+    val csvUsuariosFile = File("src/main/resources/usuarios.csv")
+    val csvResultadosFile = File("src/main/resources/resultados.csv")
+    csvUsuariosFile.createNewFile()
+    csvResultadosFile.createNewFile()
+
+    // Usamos la libreria castingCSV para la creación de estos archivos. Recogemos la info de las data class que hemos creado
+    // al principio del documento para poder crear una lista de listas en las que añadiremos las distintas filas de la
+    // que constarán nuestros CSV
+    val transUsuarios = castingCSV().fromCSV<Usuarios>(csvUsuariosFile)
+    val transResultados = castingCSV().fromCSV<Resultados>(csvResultadosFile)
+    val filasCSVUsuarios = transUsuarios.toMutableList()
+    val filasCSVResultados = transResultados.toMutableList()
+
+    // Realizamos una select para recoger toda la información de la tabla de resultados y la recorremos fila a fila para
+    // poder añadirla a la lista de listas con la información de resultados que necesitaremos para crear el csv correspondiente
+    transaction {
+        val selectResultados = resultados_trivial.selectAll().orderBy(resultados_trivial.puntuacion to SortOrder.DESC)
+        selectResultados.forEach {
+            filasCSVResultados += Resultados(
+                "\'${it[resultados_trivial.nomJugador]}\'","\'${it[resultados_trivial.puntuacion]}\'",
+                "\'${it[resultados_trivial.fecha]}\'"
+            )
+        }
+    }
+
+    // Realizamos otra select para recoger toda la información de la tabla de usuarios y la recorremos fila a fila para
+    // poder añadirla a la lista de listas con la información de usuarios
+    transaction {
+        val selectUsuarios = datos_usuario.selectAll().orderBy(datos_usuario.id)
+        selectUsuarios.forEach {
+            filasCSVUsuarios += Usuarios("\'${it[datos_usuario.id]}\'",
+                "\'${it[datos_usuario.usuario]}\'", "\'${it[datos_usuario.contrasenya]}\'", "\'${it[datos_usuario.partidasJugadas]}\'")
+        }
+    }
+
+    // Se crean los ficheros con sus nombres correspondientes recibiendo la información que hemos recogido en las selects anteriores
+    castingCSV().toCSV(filasCSVUsuarios,csvUsuariosFile.outputStream())
+    castingCSV().toCSV(filasCSVResultados,csvResultadosFile.outputStream())
+}
+
+fun main() {
     trivial(comienzoJuego())
 }

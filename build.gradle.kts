@@ -20,6 +20,7 @@ dependencies {
     implementation("com.h2database:h2:2.1.212")
     implementation("org.xerial:sqlite-jdbc:3.36.0.3")
     implementation("net.anwiba.database:anwiba-database-sqlite:1.1.158")
+    implementation("com.floern.castingcsv:casting-csv-kt:1.2")
 }
 
 tasks.test {
