@@ -21,6 +21,7 @@ dependencies {
     implementation("org.xerial:sqlite-jdbc:3.36.0.3")
     implementation("net.anwiba.database:anwiba-database-sqlite:1.1.158")
     implementation("com.floern.castingcsv:casting-csv-kt:1.2")
+    testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:5.6.2")
 }
 
 tasks.test {
