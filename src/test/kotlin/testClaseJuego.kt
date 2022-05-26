@@ -1,3 +1,4 @@
+import clasesPrograma.Juego
 import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
 
@@ -13,6 +14,8 @@ class testClaseJuego {
         nuevoJuego.lecturaPreguntas()
         nuevoJuego.escogerDiezPreguntas()
         assertEquals(10,nuevoJuego.diezPreguntas.size)
+
+        println("Pasa correctamente el test de escoger 10 preguntas")
     }
 
     // Comprobamos que la función reconoce cuando una respuesta es correcta y cuando no
@@ -22,5 +25,7 @@ class testClaseJuego {
         val pregunta = mapOf("respuesta" to "A")
         assertEquals(true,nuevoJuego.revisarRespuesta(pregunta,"A"))
         assertEquals(false,nuevoJuego.revisarRespuesta(pregunta,"B"))
+
+        println("Pasa correctamente el test de revisar respuesta")
     }
 }
